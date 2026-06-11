@@ -1,0 +1,10 @@
+sentence-transformers==2.7.0
+faiss-cpu==1.8.0
+pandas==2.2.0
+pyarrow==15.0.0
+numpy==1.26.4
+smart-open==7.0.4
+fastapi==0.111.0
+uvicorn==0.29.0
+streamlit==1.35.0
+python-dateutil==2.9.0

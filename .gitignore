@@ -1,0 +1,30 @@
+# Virtual environment
+venv/
+
+# Artifact files (too large for GitHub)
+artifacts/
+*.faiss
+*.parquet
+*.npy
+
+# Data files (too large for GitHub)
+data/candidates.jsonl.gz
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# VS Code
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Environment variables
+.env
+
+# Jupyter notebooks checkpoints
+.ipynb_checkpoints/
