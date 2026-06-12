@@ -28,7 +28,7 @@ from datetime import datetime
 
 # Input files
 SAMPLE_FILE   = "data/sample_candidates.json"
-FULL_FILE     = "data/candidates.jsonl.gz"
+FULL_FILE     = "data/candidates.jsonl"
 
 # Output files (saved into artifacts/)
 OUTPUT_SAMPLE = "artifacts/validated_sample.jsonl"
@@ -63,7 +63,7 @@ def load_full_dataset(filepath):
     """
     print(f"\n📂 Loading full dataset: {filepath}")
     count = 0
-    with gzip.open(filepath, "rt", encoding="utf-8") as f:
+    with open(filepath, "r", encoding="utf-8") as f:
         for line in f:
             line = line.strip()
             if line:                          # skip empty lines
@@ -158,7 +158,7 @@ def detect_honeypot(candidate):
     salary = signals["expected_salary_range_inr_lpa"]
     sal_min = salary.get("min", 0)
     sal_max = salary.get("max", 0)
-    if sal_min > sal_max + 1:
+    if sal_min > sal_max :
         reasons.append(
             f"Impossible salary: min ({sal_min}) > max ({sal_max})"
         )
