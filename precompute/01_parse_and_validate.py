@@ -17,7 +17,6 @@ HOW TO RUN:
 """
 
 import json
-import gzip
 import os
 import argparse
 from datetime import datetime
