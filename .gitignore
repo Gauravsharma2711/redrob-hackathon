@@ -8,7 +8,7 @@ artifacts/
 *.npy
 
 # Data files (too large for GitHub)
-data/candidates.jsonl.gz
+data/candidates.jsonl.
 
 # Python cache
 __pycache__/
