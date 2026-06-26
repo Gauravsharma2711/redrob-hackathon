@@ -120,8 +120,53 @@ NON_TECHNICAL_TITLES = [
     "hr manager", "customer support", "sales manager",
     "civil engineer", "mechanical engineer", "graphic designer",
     "content writer", "business development", "finance manager",
-    "supply chain", "procurement", "legal"
+    "supply chain", "procurement", "legal",
+    # Gap 4 fix: original list missed common variants of the same
+    # roles (e.g. CAND_0033000 had "sales executive", not "sales manager")
+    "sales executive", "sales representative", "sales associate",
+    "talent acquisition", "recruiter", "administrative",
+    "office manager", "data entry", "teacher", "professor",
+    "relationship manager", "branch manager", "store manager"
 ]
+
+# ─────────────────────────────────────────────
+# GAP 3 FIX: "AI DABBLER" BOILERPLATE DETECTION
+# ─────────────────────────────────────────────
+#
+# The dataset contains recurring boilerplate summary/description
+# templates that mention "RAG side project", "vector databases",
+# "LangChain", "OpenAI APIs" -- exactly the kind of recent (<12mo),
+# hobbyist-only AI exposure the JD explicitly says is a non-fit:
+#   "If your AI experience consists primarily of recent (under 12
+#    months) projects using LangChain to call OpenAI APIs -- we will
+#    probably not move forward."
+#
+# We match on CO-OCCURRENCE of boilerplate phrases (any one set
+# matching fully is enough to flag), since this catches paraphrased
+# variants too. If you have the literal template strings from your
+# own EDA, add them below as single-phrase sets for exact-match
+# detection -- everything else in this function stays the same.
+AI_DABBLER_BOILERPLATE_SIGNALS = [
+    {"rag", "langchain"},
+    {"langchain", "openai api"},
+    {"langchain", "openai apis"},
+    {"vector database", "side project"},
+    {"rag", "side project"},
+]
+
+
+def detect_ai_dabbler_boilerplate(text):
+    """
+    Returns True if the given text looks like one of the dataset's
+    known 'AI dabbler' boilerplate blocks (recent hobbyist
+    LangChain/OpenAI side-project language with no real production
+    depth behind it).
+    """
+    text = (text or "").lower()
+    for signal_set in AI_DABBLER_BOILERPLATE_SIGNALS:
+        if all(phrase in text for phrase in signal_set):
+            return True
+    return False
 
 # India cities the JD prefers (Pune/Noida primarily, others acceptable)
 PREFERRED_CITIES = [
@@ -182,14 +227,48 @@ def compute_career_score(candidate):
         reverse=True
     )[:3]  # only look at the 3 most recent jobs
 
-    combined_career_text = " ".join([
-        j.get("description", "") for j in recent_jobs
-    ]).lower()
+    # Gap 2 fix: the dataset's ~10 static description templates repeat
+    # across jobs (sometimes within the same candidate). Dedupe by exact
+    # text so a repeated paragraph is only ever treated as ONE piece of
+    # evidence, not double-counted as if it were two genuine jobs.
+    seen_descriptions = set()
+    deduped_recent_jobs = []
+    for j in recent_jobs:
+        desc = j.get("description", "")
+        if desc not in seen_descriptions:
+            seen_descriptions.add(desc)
+            deduped_recent_jobs.append(j)
 
     unique_ai_hits = set()
-    for keyword in AI_KEYWORDS_IN_CAREER:
-        if keyword.lower() in combined_career_text:
-            unique_ai_hits.add(keyword)
+    title_description_mismatch = False
+
+    for j in deduped_recent_jobs:
+        desc = j.get("description", "").lower()
+
+        hits_in_this_job = {
+            kw for kw in AI_KEYWORDS_IN_CAREER if kw.lower() in desc
+        }
+        if not hits_in_this_job:
+            continue
+
+        # Gap 1 fix: titles and descriptions are randomly paired from a
+        # template pool in ~80% of records, so an AI-keyword-rich
+        # description sitting under a clearly non-technical job title
+        # (e.g. "Graphic Designer") is most likely a mismatched template,
+        # not real evidence of AI work. Down-weight it instead of
+        # dropping it entirely, since it's still possible (just less
+        # likely) that the person genuinely did this work.
+        job_title = j.get("title", profile.get("current_title", "")).lower()
+        job_title_is_non_technical = any(
+            nt in job_title for nt in NON_TECHNICAL_TITLES
+        )
+
+        if job_title_is_non_technical and len(hits_in_this_job) >= 2:
+            title_description_mismatch = True
+            half = max(1, len(hits_in_this_job) // 2)
+            unique_ai_hits.update(list(hits_in_this_job)[:half])
+        else:
+            unique_ai_hits.update(hits_in_this_job)
 
     # Each unique AI keyword is worth 2.5 points, capped at 35
     career_ai_points = min(len(unique_ai_hits) * 2.5, 35)
@@ -206,13 +285,21 @@ def compute_career_score(candidate):
 
     PROFICIENCY_WEIGHT = {"advanced": 3, "intermediate": 2, "beginner": 1}
 
+    # Gap 4 fix: self-reported skills with NO corroborating evidence in
+    # the actual career history (no AI keyword hit anywhere above) are
+    # the easiest thing to keyword-stuff. We still give some credit
+    # (career changers/freshers deserve benefit of the doubt) but at a
+    # fraction of the weight of a corroborated claim.
+    has_corroborating_career_evidence = len(unique_ai_hits) > 0
+    corroboration_factor = 1.0 if has_corroborating_career_evidence else 0.3
+
     skill_ai_points = 0.0
     for skill in skills:
         skill_name = skill.get("name", "").lower()
         if any(ai_skill in skill_name for ai_skill in AI_SKILL_NAMES):
             level  = skill.get("proficiency", "beginner")
             weight = PROFICIENCY_WEIGHT.get(level, 1)
-            skill_ai_points += weight * 0.8  # each matching skill adds up
+            skill_ai_points += weight * 0.8 * corroboration_factor  # each matching skill adds up
 
     skill_ai_points = min(skill_ai_points, 15)  # cap at 15
     score += skill_ai_points
@@ -295,7 +382,22 @@ def compute_career_score(candidate):
     else:
         score += 0   # non-technical title
 
-    return round(min(score, 100), 2)
+    # ── GAP 3 PENALTY: "AI dabbler" boilerplate detected ────────────
+    # The JD explicitly rejects candidates whose AI experience is
+    # recent, surface-level LangChain/OpenAI-API side-project work.
+    # Check the candidate's summary (if present) plus their full career
+    # history -- this is a direct penalty on career_score; the same
+    # detector is also exposed via detect_ai_dabbler_boilerplate() so
+    # rank.py / the embedding step can apply an equivalent penalty to
+    # semantic_score, which is the signal this pattern abuses most.
+    narrative_text = " ".join([
+        profile.get("summary", ""),
+        *[j.get("description", "") for j in career]
+    ])
+    if detect_ai_dabbler_boilerplate(narrative_text):
+        score -= 15
+
+    return round(min(max(score, 0), 100), 2)
 
 
 # ─────────────────────────────────────────────
@@ -465,6 +567,18 @@ def compute_disqualifiers(candidate):
 
     flags["non_technical_no_ai_history"] = (
         is_non_tech_title and not has_any_ai_in_career
+    )
+
+    # ── INFO FLAG: AI-dabbler boilerplate detected (Gap 3) ───────────
+    # Not added to is_disqualified -- the score penalty in
+    # compute_career_score already handles this. Surfaced here purely
+    # so rank.py / reporting can see it without recomputing.
+    narrative_text = " ".join([
+        profile.get("summary", ""),
+        *[j.get("description", "") for j in career]
+    ])
+    flags["ai_dabbler_boilerplate_detected"] = detect_ai_dabbler_boilerplate(
+        narrative_text
     )
 
     # ── FLAG 3: Too junior ───────────────────────────────────────────
