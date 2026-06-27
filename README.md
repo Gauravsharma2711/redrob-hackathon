@@ -4,6 +4,8 @@ An intelligent, two-stage recruitment screening system designed to retrieve, ran
 
 The pipeline runs semantic search via a local HuggingFace embedding model (`BAAI/bge-base-en-v1.5`) over an HNSW search graph, filters out honeypot and unqualified profiles, scores candidates on composite factors (semantic relevance, career history, availability), and outputs a formatted submission ranking.
 
+🔗 **Live Demo:** [smart-candidate-discovery.streamlit.app](https://smart-candidate-discovery.streamlit.app/)
+
 ---
 
 ## 🏗️ Architecture & Pipeline Stages
@@ -65,7 +67,7 @@ flowchart TD
 
 | File | Purpose |
 |---|---|
-| [`sandbox/app.py`](sandbox/app.py) | Interactive Streamlit interface for recruiters to test job descriptions against sample candidate pools, visualizing match scores and generated reasoning. |
+| [`sandbox/app.py`](sandbox/app.py) | Interactive Streamlit interface for recruiters to test job descriptions against sample candidate pools, visualizing match scores and generated reasoning. Live deployment: [smart-candidate-discovery.streamlit.app](https://smart-candidate-discovery.streamlit.app/). |
 
 ---
 
@@ -80,7 +82,7 @@ flowchart TD
 
 **1. Clone & navigate to the repository**
 ```bash
-git clone <repository_url>
+git clone https://github.com/Gauravsharma2711/redrob-hackathon.git
 cd redrob-hackathon
 ```
 
